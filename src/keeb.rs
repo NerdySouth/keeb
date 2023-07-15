@@ -31,7 +31,9 @@ pub struct NKROReport {
 
 /* Physical Layout of Keeb:
  *
- * | 0
+ * TODO: Give ascii art representation of the physical
+ * layout, with the switch ID's in their proper places corresponding
+ * to their respective GPIO pin numbers when possible
  *
  */
 
@@ -65,4 +67,3 @@ impl KeebState {
         }
     }
 }
-
