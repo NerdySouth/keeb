@@ -133,10 +133,9 @@ fn main() -> ! {
     }
 
     // setup GPIO pins
-    let key = pins.gpio0.into_pull_up_input();
 
     // used to track state of key switches
-    let mut state = KeebState::new();
+    let mut state = KeebState::new(pins);
 
     unsafe {
         // Enable the USB interrupt
@@ -147,7 +146,8 @@ fn main() -> ! {
 
     // Move the cursor up and down every 200ms
     loop {
-        if key.is_low().unwrap() {
+        state.update_state();
+        if state.get_switch_state(0) {
             let rep_up = NKROReport {
                 modifier: 0,
                 reserved: 0,

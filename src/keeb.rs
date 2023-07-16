@@ -1,4 +1,6 @@
+use embedded_hal::digital::v2::InputPin;
 use heapless::{FnvIndexMap, IndexMap};
+use rp_pico::{hal::gpio::dynpin::*, Pins};
 use usbd_hid::descriptor::generator_prelude::*;
 // This is our custom keyboard report descriptor. It has a bit-packed u8 that
 // represents the modifier keys (per HID usage tables), an empty reserve byte,
@@ -31,10 +33,18 @@ pub struct NKROReport {
 
 /* Physical Layout of Keeb:
  *
- * TODO: Give ascii art representation of the physical
- * layout, with the switch ID's in their proper places corresponding
- * to their respective GPIO pin numbers when possible
+ *  Right side:
+ * |  0  |  1  |  2  |  3  |  4 | 5  |
+ * |  6  |  7  |  8  |  9  | 10 | 11 |
+ * |  12 |  13 |  14 |  15 | 16 | 17 |
+ * |  18 |  19 |  20 |
  *
+ *
+ *  Left side:
+ * |  0  |  1  |  2  |  3  |  4 | 5  |
+ * |  6  |  7  |  8  |  9  | 10 | 11 |
+ * |  12 |  13 |  14 |  15 | 16 | 17 |
+ *                 |  18 |  19 |  20 |
  */
 
 pub struct KeebState {
@@ -46,24 +56,62 @@ pub struct KeebState {
     //
     // Ex: bit 0 of keys_left represents the state of physical switch 0
     // on the left-hand board, bit 20 represents the state of physical switch 20
-    keys_left: u32,
-    keys_right: u32,
-    // maps physical keys (GPIO pins) to an array of keycodes. We use an array,
-    // because we can map multiple values to the same key, and switch between
-    // them using 'layers'
-    //
-    // We make this big enough for 64 keys b/c the heapless crate requires that
-    // the size of an IndexMap be a power of two, otherwise it could have been
-    // smaller.
-    key_map: FnvIndexMap<u8, [u8; 3], 64>,
+    state: u32,
+    pins: [DynPin; 21],
 }
 
 impl KeebState {
-    pub fn new() -> Self {
-        KeebState {
-            keys_left: 0,
-            keys_right: 0,
-            key_map: FnvIndexMap::<u8, [u8; 3], 64>::new(),
+    pub fn new(pins: Pins) -> Self {
+        let mut state = KeebState {
+            state: 0,
+            pins: [
+                pins.gpio0.into(),
+                pins.gpio1.into(),
+                pins.gpio2.into(),
+                pins.gpio3.into(),
+                pins.gpio4.into(),
+                pins.gpio5.into(),
+                pins.gpio26.into(),
+                pins.gpio22.into(),
+                pins.gpio21.into(),
+                pins.gpio20.into(),
+                pins.gpio19.into(),
+                pins.gpio18.into(),
+                pins.gpio15.into(),
+                pins.gpio14.into(),
+                pins.gpio13.into(),
+                pins.gpio12.into(),
+                pins.gpio11.into(),
+                pins.gpio10.into(),
+                pins.gpio8.into(),
+                pins.gpio7.into(),
+                pins.gpio6.into(),
+            ],
+        };
+        Self::setup_pins(&mut state);
+        state
+    }
+
+    fn setup_pins(self: &mut Self) {
+        for i in 0..21 {
+            self.pins[i].into_pull_up_input();
+        }
+    }
+
+    pub fn update_state(self: &mut Self) {
+        for i in 0..21 {
+            match self.pins[i].is_low() {
+                Ok(_) => self.state |= 0b1 << i,
+                Err(_) => self.state &= 0b0 << i,
+            }
+        }
+    }
+
+    pub fn get_switch_state(self: &Self, switch: u8) -> bool {
+        let curr_state = self.state & (0b1 << switch);
+        match curr_state {
+            0 => false,
+            _ => true,
         }
     }
 }
