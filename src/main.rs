@@ -13,7 +13,6 @@
 
 #![no_std]
 #![no_main]
-
 // The macro for our start-up function
 use rp_pico::entry;
 
@@ -46,8 +45,8 @@ use usbd_hid::descriptor::generator_prelude::*;
 use usbd_hid::hid_class::HIDClass;
 
 // import our keeb module
-use keeb::keeb::*;
-
+use keeb::hid;
+use keyberon::key_code::KeyCode;
 /// The USB Device Driver (shared with the interrupt).
 static mut USB_DEVICE: Option<UsbDevice<hal::usb::UsbBus>> = None;
 
@@ -114,7 +113,7 @@ fn main() -> ! {
     let bus_ref = unsafe { USB_BUS.as_ref().unwrap() };
 
     // Set up the USB HID Class Device driver, providing Mouse Reports
-    let usb_hid = HIDClass::new(bus_ref, NKROReport::desc(), 60);
+    let usb_hid = HIDClass::new(bus_ref, hid::NKRO_REPORT_DESCRIPTOR, 60);
     unsafe {
         // Note (safety): This is safe as interrupts haven't been started yet.
         USB_HID = Some(usb_hid);
@@ -135,8 +134,7 @@ fn main() -> ! {
     // setup GPIO pins
 
     // used to track state of key switches
-    let mut state = KeebState::new(pins);
-
+    let key = pins.gpio0.into_pull_up_input();
     unsafe {
         // Enable the USB interrupt
         pac::NVIC::unmask(hal::pac::Interrupt::USBCTRL_IRQ);
@@ -146,27 +144,13 @@ fn main() -> ! {
 
     // Move the cursor up and down every 200ms
     loop {
-        state.update_state();
-        if state.get_switch_state(0) {
-            let rep_up = NKROReport {
-                modifier: 0,
-                reserved: 0,
-                keycodes: [
-                    0x1c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                ],
-            };
-            push_mouse_movement(rep_up).ok().unwrap_or(0);
+        if key.is_low().unwrap() {
+            let mut rep_up = hid::NKROReport::default();
+            rep_up.pressed(KeyCode::Y);
+            //push_mouse_movement(rep_up).ok().unwrap_or(0);
         } else {
-            let rep_down = NKROReport {
-                modifier: 0,
-                reserved: 0,
-                keycodes: [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                ],
-            };
-            push_mouse_movement(rep_down).ok().unwrap_or(0);
+            let _rep_down = hid::NKROReport::default();
+            //push_mouse_movement(rep_down).ok().unwrap_or(0);
         }
     }
 }
@@ -174,14 +158,14 @@ fn main() -> ! {
 /// Submit a new mouse movement report to the USB stack.
 ///
 /// We do this with interrupts disabled, to avoid a race hazard with the USB IRQ.
-fn push_mouse_movement(report: NKROReport) -> Result<usize, usb_device::UsbError> {
-    critical_section::with(|_| unsafe {
-        // Now interrupts are disabled, grab the global variable and, if
-        // available, send it a HID report
-        USB_HID.as_mut().map(|hid| hid.push_input(&report))
-    })
-    .unwrap()
-}
+//fn push_mouse_movement(report: hid::NKROReport) -> Result<usize, usb_device::UsbError> {
+//    critical_section::with(|_| unsafe {
+//        // Now interrupts are disabled, grab the global variable and, if
+//        // available, send it a HID report
+//        USB_HID.as_mut().map(|hid| hid.push_input(&report))
+//    })
+//    .unwrap()
+//}
 
 /// This function is called whenever the USB Hardware generates an Interrupt
 /// Request.

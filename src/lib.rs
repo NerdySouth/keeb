@@ -1,2 +1,2 @@
 #![no_std]
-pub mod keeb;
+pub mod hid;
